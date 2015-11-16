@@ -20,13 +20,13 @@ import (
 )
 
 // The base path for MidoNet in the NSDB.
-var rootPath = flag.String("root_key", "/midonet/v1", "The root path of the NSDB")
+var rootPath = flag.String("root_key", "/midonet", "The root path of the NSDB")
 
 // The path to the locks in the NSDB.
 var locksPath = *rootPath + "/locks"
 
 // The path to the ports in the NSDB.
-var portsPath = *rootPath + "/ports"
+var portsPath = *rootPath + "/zoom/0/models/Port"
 
 var vrnMappingsPath = *rootPath + "hosts"
 
@@ -38,12 +38,6 @@ func GetLockPath(lockName string) string {
 // Get the path for the port which UUID is given as an argument.
 func GetPortPath(portUuid string) string {
 	return portsPath + "/" + portUuid
-}
-
-// Get the path for the vrn mapping for the port which UUID is given as the
-// second argument on the host which UUID is given as the first argument.
-func GetVrnMappingPath(hostUuid, portUuid string) string {
-	return *rootPath + "/hosts/" + hostUuid + "/vrnMappings/ports/" + portUuid
 }
 
 // Normalize the path string, which should not end with "/".

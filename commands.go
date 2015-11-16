@@ -23,8 +23,7 @@ import (
 	ini "gopkg.in/ini.v1"
 )
 
-// const HostUuid = "b53b82f3-ebe5-4e8d-9088-8b3ae4ade76e"w
-var hostUuid = flag.String("host_uuid", "", "The UUID of the host (required).")
+var hostUuid = flag.String("host_uuid", "", "The UUID of the host.")
 
 // the name of the command.
 const CommandName = "mm-ctl"
@@ -45,7 +44,7 @@ func loadConfig() error {
 		return err
 	}
 	*rootPath = zkSection.Key("root_key").String()
-	*nsdbAddresses = zkSection.Key("zookeeper_hosts").String()
+	*zookeeperAddresses = zkSection.Key("zookeeper_hosts").String()
 	*hostUuid = cfg.Section("").Key("host_uuid").String()
 
 	return nil
@@ -78,7 +77,6 @@ func (b *Binding) Run(args []string) int {
 		return 1
 	}
 	portUuid := bindCmdFlag.Arg(0)
-	fmt.Printf("host_uuid: %s\n", *hostUuid)
 	if *hostUuid == "" {
 		fmt.Fprintf(os.Stderr, "Host UUID is required.\n")
 		return 1
@@ -112,9 +110,6 @@ func (u *Unbinding) Run(args []string) int {
 	if *hostUuid == "" {
 		unbindCmdFlag.StringVar(hostUuid, "host_uuid", "", "The UUID of the host (required).")
 	}
-	// unbindCmdFlag.StringVar(nsdbAddresses, "zookeeper_hosts", "127.0.0.1:2181",
-	// 	"The Addresses of ZooKeeper nodes separated by commas")
-	// unbindCmdFlag.StringVar(rootPath, "root_key", "/midonet/v1", "The root path of the NSDB")
 
 	unbindCmdFlag.Parse(args)
 
