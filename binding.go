@@ -21,14 +21,24 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strings"
 	"time"
 
+	curator "github.com/flier/curator.go"
+	recipes "github.com/flier/curator.go/recipes"
 	"github.com/samuel/go-zookeeper/zk"
 )
 
+const (
+	// The base time to sleep for curator.go connection.
+	BaseSleepTime = time.Second
+	// The maximum number of the retry for curator.go.
+	MaxRetries = 3
+	// The maximum time to sleep for curator.go connection.
+	MaxSleep = 15 * time.Second
+)
+
 // The address of the NSDB.
-var nsdbAddresses = flag.String("zookeeper_hosts", "127.0.0.1:2181",
+var zookeeperAddresses = flag.String("zookeeper_hosts", "127.0.0.1:2181",
 	"The Addresses of ZooKeeper nodes separated by commas")
 
 // The timout for the NSDB session in seconds.
@@ -37,33 +47,36 @@ const sessionTimeoutSec = 10
 // The key for the ZOOM topology lock path.
 const lockKey = "zoom-topology"
 
-func connect() (*zk.Conn, <-chan zk.Event, error) {
-	addresses := strings.Split(*nsdbAddresses, ",")
-	for i := range addresses {
-		addresses[i] = strings.TrimSpace(addresses[i])
-	}
-	return zk.Connect(addresses,
-		time.Duration(sessionTimeoutSec)*time.Second)
+func newClient() curator.CuratorFramework {
+	retryPolicy := curator.NewExponentialBackoffRetry(
+		BaseSleepTime, MaxRetries, MaxSleep)
+	client := curator.NewClient(*zookeeperAddresses, retryPolicy)
+	client.Start()
+
+	return client
+
 }
 
 func binding(portUuid, hostUuid, interfaceName string) error {
 	log.Println("binding port " + portUuid + " to " + interfaceName)
+	client := newClient()
+	defer client.Close()
 
-	conn, _, err := connect()
+	lock, err := recipes.NewInterProcessMutex(client, GetLockPath(lockKey))
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error on instantiating a lock: %s\n", err.Error())
 		return err
 	}
-	defer conn.Close()
 
-	lock := zk.NewLock(conn, GetLockPath(lockKey), zk.WorldACL(zk.PermAll))
-	if err = lock.Lock(); err != nil {
+	if _, err := lock.Acquire(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error on locking NSDB: %s\n", err.Error())
 		return err
 	}
-	defer lock.Unlock()
+	defer lock.Release()
 
 	portPath := GetPortPath(portUuid)
 	var data []byte
-	if data, _, err = conn.Get(portPath); err != nil {
+	if data, err = client.GetData().ForPath(portPath); err != nil {
 		fmt.Fprintf(os.Stderr, "Error on getting port %s: %s\n",
 			portPath, err.Error())
 		return err
@@ -85,7 +98,7 @@ func binding(portUuid, hostUuid, interfaceName string) error {
 		return err
 	}
 
-	if _, err = conn.Set(portPath, updatedPort, -1); err != nil {
+	if _, err = client.SetData().ForPathWithData(portPath, []byte(updatedPort)); err != nil {
 		fmt.Fprintf(os.Stderr, "Error on setting port %s: %s\n",
 			portPath, err.Error())
 		return err
@@ -93,15 +106,21 @@ func binding(portUuid, hostUuid, interfaceName string) error {
 
 	vrnMappingPath := GetVrnMappingPath(hostUuid, portUuid)
 	var exists bool
-	if exists, _, err = conn.Exists(vrnMappingPath); err != nil {
+	var stat *zk.Stat
+	if stat, err = client.CheckExists().ForPath(vrnMappingPath); err != nil {
 		fmt.Fprintf(os.Stderr, "Error on examining vrnMapping %s: %s\n",
 			vrnMappingPath, err.Error())
 		return err
 	}
+	if stat != nil {
+		exists = true
+	} else {
+		exists = false
+	}
 	var vrnMappingData []byte
 	vrnMapping := &WrappedVrnMapping{}
 	if exists {
-		if vrnMappingData, _, err = conn.Get(vrnMappingPath); err != nil {
+		if vrnMappingData, err = client.GetData().ForPath(vrnMappingPath); err != nil {
 			fmt.Fprintf(os.Stderr, "Error on getting vrnMapping %s: %s\n",
 				vrnMappingPath, err.Error())
 			return err
@@ -126,13 +145,13 @@ func binding(portUuid, hostUuid, interfaceName string) error {
 		return err
 	}
 	if exists {
-		if _, err = conn.Set(vrnMappingPath, updatedVrnMapping, -1); err != nil {
+		if _, err = client.SetData().ForPathWithData(vrnMappingPath, updatedVrnMapping); err != nil {
 			fmt.Fprintf(os.Stderr, "Error on setting vrnMapping %s: %s\n",
 				vrnMappingPath, err.Error())
 			return err
 		}
 	} else {
-		if _, err = conn.Create(vrnMappingPath, updatedVrnMapping, 0, zk.WorldACL(zk.PermAll)); err != nil {
+		if _, err = client.Create().WithACL(zk.WorldACL(zk.PermAll)...).ForPathWithData(vrnMappingPath, updatedVrnMapping); err != nil {
 			fmt.Fprintf(os.Stderr, "Error on creating a new vrnMapping %s: %s\n",
 				vrnMappingPath, err.Error())
 			return err
@@ -147,21 +166,19 @@ func binding(portUuid, hostUuid, interfaceName string) error {
 func unbinding(portUuid, hostUuid string) error {
 	log.Println("unbinding port " + portUuid)
 
-	conn, _, err := connect()
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
+	client := newClient()
+	defer client.Close()
 
-	lock := zk.NewLock(conn, GetLockPath(lockKey), zk.WorldACL(zk.PermAll))
-	if err = lock.Lock(); err != nil {
+	lock, err := recipes.NewInterProcessMutex(client, GetLockPath(lockKey))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error on instantiating a lock: %s\n", err.Error())
 		return err
 	}
-	defer lock.Unlock()
+	defer lock.Release()
 
 	portPath := GetPortPath(portUuid)
 	var data []byte
-	if data, _, err = conn.Get(portPath); err != nil {
+	if data, err = client.GetData().ForPath(portPath); err != nil {
 		fmt.Fprintf(os.Stderr, "Error on getting  port %s: %s\n",
 			portPath, err.Error())
 		return err
@@ -185,19 +202,25 @@ func unbinding(portUuid, hostUuid string) error {
 		return err
 	}
 
-	if _, err = conn.Set(portPath, updatedPort, -1); err != nil {
+	if _, err = client.SetData().ForPathWithData(portPath, updatedPort); err != nil {
 		return err
 	}
 
 	vrnMappingPath := GetVrnMappingPath(hostUuid, portUuid)
 	var exists bool
-	if exists, _, err = conn.Exists(vrnMappingPath); err != nil {
+	var stat *zk.Stat
+	if stat, err = client.CheckExists().ForPath(vrnMappingPath); err != nil {
 		fmt.Fprintf(os.Stderr, "Error on examining vrnMapping %s: %s\n",
 			vrnMappingPath, err.Error())
 		return err
 	}
+	if stat != nil {
+		exists = true
+	} else {
+		exists = false
+	}
 	if exists {
-		if err = conn.Delete(vrnMappingPath, -1); err != nil {
+		if err = client.Delete().ForPath(vrnMappingPath); err != nil {
 			fmt.Fprintf(os.Stderr, "Error on deleging vrnMapping %s: %s\n",
 				vrnMappingPath, err.Error())
 			return err

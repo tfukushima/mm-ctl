@@ -48,7 +48,7 @@ func loadConfig() error {
 	if *rootPath == "" {
 		*rootPath = zkSection.Key("midolman_root_key").String()
 	}
-	*nsdbAddresses = zkSection.Key("zookeeper_hosts").String()
+	*zookeeperAddresses = zkSection.Key("zookeeper_hosts").String()
 	*hostUuid = cfg.Section("").Key("host_uuid").String()
 
 	return nil
@@ -70,9 +70,6 @@ func (b *Binding) Run(args []string) int {
 	if *hostUuid == "" {
 		bindCmdFlag.StringVar(hostUuid, "host_uuid", "", "The UUID of the host (required).")
 	}
-	// bindCmdFlag.StringVar(nsdbAddresses, "zookeeper_hosts", "127.0.0.1:2181",
-	// 	"The Addresses of ZooKeeper nodes separated by commas")
-	// bindCmdFlag.StringVar(rootPath, "root_key", "/midonet/v1", "The root path of the NSDB")
 
 	bindCmdFlag.Parse(args)
 
@@ -115,9 +112,6 @@ func (u *Unbinding) Run(args []string) int {
 	if *hostUuid == "" {
 		unbindCmdFlag.StringVar(hostUuid, "host_uuid", "", "The UUID of the host (required).")
 	}
-	// unbindCmdFlag.StringVar(nsdbAddresses, "zookeeper_hosts", "127.0.0.1:2181",
-	// 	"The Addresses of ZooKeeper nodes separated by commas")
-	// unbindCmdFlag.StringVar(rootPath, "root_key", "/midonet/v1", "The root path of the NSDB")
 
 	unbindCmdFlag.Parse(args)
 
