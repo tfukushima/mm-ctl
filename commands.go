@@ -45,6 +45,9 @@ func loadConfig() error {
 		return err
 	}
 	*rootPath = zkSection.Key("root_key").String()
+	if *rootPath == "" {
+		*rootPath = zkSection.Key("midolman_root_key").String()
+	}
 	*nsdbAddresses = zkSection.Key("zookeeper_hosts").String()
 	*hostUuid = cfg.Section("").Key("host_uuid").String()
 
