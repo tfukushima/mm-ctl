@@ -64,12 +64,14 @@ func binding(portUuid, hostUuid, interfaceName string) error {
 	portPath := GetPortPath(portUuid)
 	var data []byte
 	if data, _, err = conn.Get(portPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Error on getting port: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Error on getting port %s: %s\n",
+			portPath, err.Error())
 		return err
 	}
 	port := &WrappedPort{}
 	if err = json.Unmarshal(data, port); err != nil {
-		fmt.Fprintf(os.Stderr, "Error on deserializing port: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Error on deserializing port %s: %s\n",
+			portPath, err.Error())
 		return err
 	}
 
@@ -78,31 +80,36 @@ func binding(portUuid, hostUuid, interfaceName string) error {
 
 	updatedPort, err := json.Marshal(port)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error on serializing port: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Error on serializing port %s: %s\n",
+			portPath, err.Error())
 		return err
 	}
 
 	if _, err = conn.Set(portPath, updatedPort, -1); err != nil {
-		fmt.Fprintf(os.Stderr, "Error on setting port: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Error on setting port %s: %s\n",
+			portPath, err.Error())
 		return err
 	}
 
 	vrnMappingPath := GetVrnMappingPath(hostUuid, portUuid)
 	var exists bool
 	if exists, _, err = conn.Exists(vrnMappingPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Error on examining vrnMapping %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Error on examining vrnMapping %s: %s\n",
+			vrnMappingPath, err.Error())
 		return err
 	}
 	var vrnMappingData []byte
 	vrnMapping := &WrappedVrnMapping{}
 	if exists {
 		if vrnMappingData, _, err = conn.Get(vrnMappingPath); err != nil {
-			fmt.Fprintf(os.Stderr, "Error on getting vrnMapping %s\n", err.Error())
+			fmt.Fprintf(os.Stderr, "Error on getting vrnMapping %s: %s\n",
+				vrnMappingPath, err.Error())
 			return err
 		}
 		log.Println(fmt.Sprintf("Got vrnMapping data: %s", vrnMappingData))
 		if err = json.Unmarshal(vrnMappingData, vrnMapping); err != nil {
-			fmt.Fprintf(os.Stderr, "Error on deserializing vrnMapping:  %s\n", err.Error())
+			fmt.Fprintf(os.Stderr, "Error on deserializing vrnMapping %s: %s\n",
+				vrnMappingPath, err.Error())
 			return err
 		}
 	} else {
@@ -114,17 +121,20 @@ func binding(portUuid, hostUuid, interfaceName string) error {
 	}
 	updatedVrnMapping, err := json.Marshal(vrnMapping)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error on deserializing vrnMapping: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Error on deserializing vrnMapping %s: %s\n",
+			vrnMappingPath, err.Error())
 		return err
 	}
 	if exists {
 		if _, err = conn.Set(vrnMappingPath, updatedVrnMapping, -1); err != nil {
-			fmt.Fprintf(os.Stderr, "Error on setting vrnMapping: %s\n", err.Error())
+			fmt.Fprintf(os.Stderr, "Error on setting vrnMapping %s: %s\n",
+				vrnMappingPath, err.Error())
 			return err
 		}
 	} else {
 		if _, err = conn.Create(vrnMappingPath, updatedVrnMapping, 0, zk.WorldACL(zk.PermAll)); err != nil {
-			fmt.Fprintf(os.Stderr, "Error on creating a new vrnMapping:  %s\n", err.Error())
+			fmt.Fprintf(os.Stderr, "Error on creating a new vrnMapping %s: %s\n",
+				vrnMappingPath, err.Error())
 			return err
 		}
 	}
@@ -152,12 +162,14 @@ func unbinding(portUuid, hostUuid string) error {
 	portPath := GetPortPath(portUuid)
 	var data []byte
 	if data, _, err = conn.Get(portPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Error on getting  port: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Error on getting  port %s: %s\n",
+			portPath, err.Error())
 		return err
 	}
 	port := &WrappedPort{}
 	if err = json.Unmarshal(data, port); err != nil {
-		fmt.Fprintf(os.Stderr, "Error on deserializing port: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Error on deserializing port %s: %s\n",
+			portPath, err.Error())
 		return err
 	}
 
@@ -168,7 +180,8 @@ func unbinding(portUuid, hostUuid string) error {
 
 	updatedPort, err := json.Marshal(port)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error on serializing port: %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Error on serializing port %s: %s\n",
+			portPath, err.Error())
 		return err
 	}
 
@@ -179,12 +192,14 @@ func unbinding(portUuid, hostUuid string) error {
 	vrnMappingPath := GetVrnMappingPath(hostUuid, portUuid)
 	var exists bool
 	if exists, _, err = conn.Exists(vrnMappingPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Error on examining vrnMapping %s\n", err.Error())
+		fmt.Fprintf(os.Stderr, "Error on examining vrnMapping %s: %s\n",
+			vrnMappingPath, err.Error())
 		return err
 	}
 	if exists {
 		if err = conn.Delete(vrnMappingPath, -1); err != nil {
-			fmt.Fprintf(os.Stderr, "Error on deleging vrnMapping %s\n", err.Error())
+			fmt.Fprintf(os.Stderr, "Error on deleging vrnMapping %s: %s\n",
+				vrnMappingPath, err.Error())
 			return err
 		}
 	}
